@@ -47,6 +47,7 @@ if(window.location.protocol === 'http:')
 	server = "http://" + window.location.hostname + ":8088/janus";
 else
 	server = "https://" + window.location.hostname + ":8089/janus";
+server = "wss://dev.grinfer.com/api/janus-0/rtc-ws/";
 
 var janus = null;
 var sfutest = null;
@@ -454,11 +455,17 @@ function unpublishOwnFeed() {
 function newRemoteFeed(id, display, audio, video) {
 	// A new feed has been published, create a new plugin handle and attach to it as a subscriber
 	var remoteFeed = null;
+	var switcher = null;
+
 	janus.attach(
 		{
 			plugin: "janus.plugin.videoroom",
 			opaqueId: opaqueId,
 			success: function(pluginHandle) {
+				switcher = new Switcher(pluginHandle, 2, 5, 0.5, 10_000, 10_000, function (stream) {
+					console.log("Switch substream to " + stream);
+					remoteFeed.send({ message: { request: "configure", substream: stream}});
+				});
 				remoteFeed = pluginHandle;
 				remoteFeed.simulcastStarted = false;
 				Janus.log("Plugin attached! (" + remoteFeed.getPlugin() + ", id=" + remoteFeed.getId() + ")");
@@ -528,6 +535,9 @@ function newRemoteFeed(id, display, audio, video) {
 							}
 							// We just received notice that there's been a switch, update the buttons
 							updateSimulcastButtons(remoteFeed.rfindex, substream, temporal);
+						}
+						if ((substream !== null && substream !== undefined)) {
+							switcher.switchStream(substream);
 						}
 					} else {
 						// What has just happened?
@@ -643,6 +653,7 @@ function newRemoteFeed(id, display, audio, video) {
 				bitrateTimer[remoteFeed.rfindex] = null;
 				remoteFeed.simulcastStarted = false;
 				$('#simulcast'+remoteFeed.rfindex).remove();
+				switcher.stop();
 			}
 		});
 }
